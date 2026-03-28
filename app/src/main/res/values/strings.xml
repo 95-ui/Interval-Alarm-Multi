@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Interval Alarm</string>
+
+    <string-array name="interval_units">
+        <item>Sekunden</item>
+        <item>Minuten</item>
+        <item>Stunden</item>
+    </string-array>
+</resources>
