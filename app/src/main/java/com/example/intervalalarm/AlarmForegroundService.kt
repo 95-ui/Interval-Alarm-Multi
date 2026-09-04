@@ -31,6 +31,7 @@ class AlarmForegroundService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     private var isRunning = false
     private var nextAlarmTime: Long = 0
+    private var wasOutsideTimeWindow = false   // neu
 
     override fun onCreate() {
         super.onCreate()
@@ -81,6 +82,7 @@ class AlarmForegroundService : Service() {
         if (isRunning) return
 
         isRunning = true
+        wasOutsideTimeWindow = false
 
         // WakeLock holen damit CPU nicht schlafen geht
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
@@ -129,6 +131,7 @@ class AlarmForegroundService : Service() {
 
     private fun startNextTimer() {
         countdownTimer?.cancel()
+        wasOutsideTimeWindow = false
 
         val intervalValue = prefs.getInt("interval_value", 5)
         val intervalUnit = prefs.getInt("interval_unit", 1) // 0=Sek, 1=Min, 2=Std
@@ -144,32 +147,38 @@ class AlarmForegroundService : Service() {
 
         countdownTimer = object : CountDownTimer(intervalMs, 1000) {
             override fun onTick(millisUntilFinished: Long) {
-                // Zeitfenster prüfen
-                if (prefs.getBoolean("use_time_window", false)) {
-                    if (!isWithinTimeWindow()) {
-                        // Außerhalb des Zeitfensters - Notification aktualisieren
-                        updateServiceNotification("⏸ Außerhalb des Zeitfensters - Pausiert")
-                        sendCountdownUpdate(millisUntilFinished)
-                        return
-                    }
-                }
+    val useTimeWindow = prefs.getBoolean("use_time_window", false)
+    val isOutside = useTimeWindow && !isWithinTimeWindow()
 
-                // Notification & UI aktualisieren
-                val hours = millisUntilFinished / 3600000
-                val mins = (millisUntilFinished % 3600000) / 60000
-                val secs = (millisUntilFinished % 60000) / 1000
-                val timeStr = if (hours > 0) {
-                    String.format("Nächster Alarm in: %02d:%02d:%02d", hours, mins, secs)
-                } else {
-                    String.format("Nächster Alarm in: %02d:%02d", mins, secs)
-                }
+    if (isOutside) {
+        // Nur einmal die Pausiert-Meldung setzen, wenn wir gerade das Zeitfenster verlassen
+        if (!wasOutsideTimeWindow) {
+            updateServiceNotification("⏸ Außerhalb des Zeitfensters - Pausiert")
+            wasOutsideTimeWindow = true
+        }
+        sendCountdownUpdate(millisUntilFinished)
+        return
+    }
 
-                if (prefs.getBoolean("show_notification", true)) {
-                    updateServiceNotification("⏰ $timeStr")
-                }
+    // Wir sind wieder im erlaubten Zeitfenster
+    wasOutsideTimeWindow = false
 
-                sendCountdownUpdate(millisUntilFinished)
-            }
+    // Notification & UI aktualisieren
+    val hours = millisUntilFinished / 3600000
+    val mins = (millisUntilFinished % 3600000) / 60000
+    val secs = (millisUntilFinished % 60000) / 1000
+    val timeStr = if (hours > 0) {
+        String.format("Nächster Alarm in: %02d:%02d:%02d", hours, mins, secs)
+    } else {
+        String.format("Nächster Alarm in: %02d:%02d", mins, secs)
+    }
+
+    if (prefs.getBoolean("show_notification", true)) {
+        updateServiceNotification("⏰ $timeStr")
+    }
+
+    sendCountdownUpdate(millisUntilFinished)
+}
 
             override fun onFinish() {
                 // Zeitfenster prüfen
