@@ -31,7 +31,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        loadReminders() // Liste aktualisieren, falls etwas bearbeitet wurde
+        loadReminders()
     }
 
     private fun setupRecyclerView() {
@@ -62,7 +62,6 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupButtons() {
         binding.fabAdd.setOnClickListener {
-            // Neue Erinnerung → Bearbeitungsbildschirm öffnen
             val intent = Intent(this, EditReminderActivity::class.java)
             startActivity(intent)
         }
