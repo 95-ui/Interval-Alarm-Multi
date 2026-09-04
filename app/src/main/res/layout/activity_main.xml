@@ -5,25 +5,25 @@
     android:layout_height="match_parent"
     android:orientation="vertical"
     android:padding="16dp"
-    android:background="#FAFAFA">
+    android:background="#121212">
 
     <!-- Titel -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Interval Alarm Multi"
-        android:textSize="22sp"
+        android:textSize="24sp"
         android:textStyle="bold"
-        android:textColor="#212121"
-        android:layout_marginBottom="8dp" />
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="4dp" />
 
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:text="Deine Erinnerungen"
-        android:textSize="14sp"
-        android:textColor="#757575"
-        android:layout_marginBottom="16dp" />
+        android:textSize="15sp"
+        android:textColor="#BBBBBB"
+        android:layout_marginBottom="20dp" />
 
     <!-- Liste der Erinnerungen -->
     <androidx.recyclerview.widget.RecyclerView
@@ -42,7 +42,7 @@
         android:gravity="center"
         android:text="Noch keine Erinnerungen.\nTippe auf + um eine hinzuzufügen."
         android:textSize="16sp"
-        android:textColor="#9E9E9E"
+        android:textColor="#888888"
         android:visibility="gone" />
 
     <!-- Buttons unten -->
@@ -50,23 +50,26 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginTop="12dp">
+        android:layout_marginTop="12dp"
+        android:layout_marginBottom="8dp">
 
         <Button
             android:id="@+id/btnStartAll"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="52dp"
             android:layout_weight="1"
             android:text="Alle starten"
+            android:textColor="#FFFFFF"
             android:layout_marginEnd="8dp"
-            style="@style/Widget.Material3.Button" />
+            app:backgroundTint="#E94560" />
 
         <Button
             android:id="@+id/btnStopAll"
             android:layout_width="0dp"
-            android:layout_height="wrap_content"
+            android:layout_height="52dp"
             android:layout_weight="1"
             android:text="Alle stoppen"
+            android:textColor="#E94560"
             style="@style/Widget.Material3.Button.OutlinedButton" />
     </LinearLayout>
 
@@ -75,8 +78,8 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="end"
-        android:layout_marginTop="12dp"
         android:src="@android:drawable/ic_input_add"
+        app:backgroundTint="#E94560"
         app:tint="@android:color/white" />
 
 </LinearLayout>
