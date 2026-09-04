@@ -122,7 +122,51 @@ class AlarmForegroundService : Service() {
 
     Log.d(TAG, "Service gestartet mit ${activeReminders.size} Erinnerungen")
 }
-    private fun stopAlarm() {
+    
+       private fun startTimerForReminder(reminder: Reminder) {
+    // Alten Timer für diese ID stoppen, falls vorhanden
+    timers[reminder.id]?.cancel()
+
+    val intervalMs = reminder.getIntervalMs()
+    if (intervalMs <= 0) return
+
+    val nextTime = System.currentTimeMillis() + intervalMs
+    nextAlarmTimes[reminder.id] = nextTime
+
+    val timer = object : CountDownTimer(intervalMs, 1000) {
+        override fun onTick(millisUntilFinished: Long) {
+            // Hier prüfen wir später das Zeitfenster pro Erinnerung
+            // Vorerst nur den Countdown weiterlaufen lassen
+        }
+
+        override fun onFinish() {
+            // Zeitfenster prüfen
+            if (reminder.useTimeWindow && !isWithinTimeWindow(reminder)) {
+                // Außerhalb → einfach neu starten ohne Sound
+                startTimerForReminder(reminder)
+                return
+            }
+
+            // Alarm auslösen
+            playAlarmSound(reminder)
+
+            if (reminder.customNotification) {
+                showAlarmNotification(reminder)
+            }
+
+            // Nächsten Timer für diese Erinnerung starten
+            startTimerForReminder(reminder)
+        }
+    }
+
+    timers[reminder.id] = timer
+    timer.start()
+}
+      
+
+
+
+        private fun stopAlarm() {
         isRunning = false
 
         // Timer stoppen
@@ -221,46 +265,41 @@ class AlarmForegroundService : Service() {
         }.start()
     }
 
-    private fun playAlarmSound() {
-        stopMediaPlayer()
+    private fun playAlarmSound(reminder: Reminder) {
+    stopMediaPlayer()
 
-        val fileUri = prefs.getString("selected_file_uri", null) ?: return
-        val volume = prefs.getInt("volume", 80) / 100f
+    val fileUri = reminder.fileUri ?: return
+    val volume = reminder.volume / 100f
 
-        try {
-            mediaPlayer = MediaPlayer().apply {
-                setAudioAttributes(
-                    AudioAttributes.Builder()
-                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        // WICHTIG: USAGE_MEDIA statt USAGE_ALARM!
-                        // Damit wird NICHT der Systemalarm ausgelöst!
-                        .build()
-                )
-                setDataSource(this@AlarmForegroundService, Uri.parse(fileUri))
-                setVolume(volume, volume)
-                prepare()
-                start()
-            }
-
-            // Abspieldauer begrenzen falls aktiviert
-            if (prefs.getBoolean("limit_duration", false)) {
-                val maxSeconds = prefs.getInt("max_seconds", 10)
-                handler?.postDelayed({
-                    stopMediaPlayer()
-                }, maxSeconds * 1000L)
-            } else {
-                // Wenn Song fertig ist, aufräumen
-                mediaPlayer?.setOnCompletionListener {
-                    stopMediaPlayer()
-                }
-            }
-
-            Log.d(TAG, "Alarm Sound wird abgespielt")
-        } catch (e: Exception) {
-            Log.e(TAG, "Fehler beim Abspielen: ${e.message}")
+    try {
+        mediaPlayer = MediaPlayer().apply {
+            setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .build()
+            )
+            setDataSource(this@AlarmForegroundService, Uri.parse(fileUri))
+            setVolume(volume, volume)
+            prepare()
+            start()
         }
+
+        if (reminder.limitDuration) {
+            handler?.postDelayed({
+                stopMediaPlayer()
+            }, reminder.maxSeconds * 1000L)
+        } else {
+            mediaPlayer?.setOnCompletionListener {
+                stopMediaPlayer()
+            }
+        }
+
+        Log.d(TAG, "Alarm Sound für \"${reminder.name}\" wird abgespielt")
+    } catch (e: Exception) {
+        Log.e(TAG, "Fehler beim Abspielen von ${reminder.name}: ${e.message}")
     }
+}
 
     private fun stopMediaPlayer() {
         mediaPlayer?.let {
@@ -272,52 +311,45 @@ class AlarmForegroundService : Service() {
         mediaPlayer = null
     }
 
-    private fun isWithinTimeWindow(): Boolean {
-        val now = Calendar.getInstance()
-        val currentHour = now.get(Calendar.HOUR_OF_DAY)
-        val currentMinute = now.get(Calendar.MINUTE)
-        val currentTime = currentHour * 60 + currentMinute
+    private fun isWithinTimeWindow(reminder: Reminder): Boolean {
+    val now = Calendar.getInstance()
+    val currentTime = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
 
-        val startHour = prefs.getInt("start_hour", 8)
-        val startMinute = prefs.getInt("start_minute", 0)
-        val startTime = startHour * 60 + startMinute
+    val startTime = reminder.startHour * 60 + reminder.startMinute
+    val endTime = reminder.endHour * 60 + reminder.endMinute
 
-        val endHour = prefs.getInt("end_hour", 22)
-        val endMinute = prefs.getInt("end_minute", 0)
-        val endTime = endHour * 60 + endMinute
-
-        return if (startTime <= endTime) {
-            currentTime in startTime..endTime
-        } else {
-            // Über Mitternacht hinweg (z.B. 22:00 - 06:00)
-            currentTime >= startTime || currentTime <= endTime
-        }
+    return if (startTime <= endTime) {
+        currentTime in startTime..endTime
+    } else {
+        // Über Mitternacht
+        currentTime >= startTime || currentTime <= endTime
     }
+}
 
-    private fun showAlarmNotification() {
-        val text = prefs.getString("notification_text", "Zeit für eine Pause! ⏰") ?: "Alarm!"
+    private fun showAlarmNotification(reminder: Reminder) {
+    val text = reminder.notificationText.ifBlank { "Zeit für eine Pause! ⏰" }
 
-        val openIntent = Intent(this, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
-        }
-        val pendingIntent = PendingIntent.getActivity(
-            this, 0, openIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val notification = NotificationCompat.Builder(this, CHANNEL_ALARM_ID)
-            .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle("⏰ Interval Alarm")
-            .setContentText(text)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            // KEIN setSound() - wir spielen den Sound selbst!
-            .build()
-
-        val manager = getSystemService(NotificationManager::class.java)
-        manager.notify(ALARM_NOTIFICATION_ID, notification)
+    val openIntent = Intent(this, MainActivity::class.java).apply {
+        flags = Intent.FLAG_ACTIVITY_SINGLE_TOP
     }
+    val pendingIntent = PendingIntent.getActivity(
+        this, 0, openIntent,
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+
+    val notification = NotificationCompat.Builder(this, CHANNEL_ALARM_ID)
+        .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+        .setContentTitle("⏰ ${reminder.name}")
+        .setContentText(text)
+        .setPriority(NotificationCompat.PRIORITY_HIGH)
+        .setContentIntent(pendingIntent)
+        .setAutoCancel(true)
+        .build()
+
+    val manager = getSystemService(NotificationManager::class.java)
+    // Jede Erinnerung bekommt eine eigene Notification-ID
+    manager.notify(reminder.id.hashCode(), notification)
+}
 
     private fun buildServiceNotification(text: String): Notification {
         val openIntent = Intent(this, MainActivity::class.java).apply {
