@@ -4,7 +4,7 @@ plugins {
 }
 
 android {
-    namespace 'com.example.intervalalarm.multi'
+    namespace 'com.example.intervalalarm'
     compileSdk 34
 
     defaultConfig {
