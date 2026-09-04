@@ -1,4 +1,4 @@
-package com.example.intervalalarm.multi
+package com.example.intervalalarm
 
 data class Reminder(
     val id: String = java.util.UUID.randomUUID().toString(),  // eindeutige ID
