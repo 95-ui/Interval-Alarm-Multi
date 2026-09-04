@@ -33,6 +33,11 @@
             </intent-filter>
         </activity>
 
+        <activity
+          android:name=".EditReminderActivity"
+          android:exported="false"
+          android:parentActivityName=".MainActivity" />
+
         <!-- WICHTIG: Foreground Service für Hintergrund-Betrieb -->
         <service
             android:name=".AlarmForegroundService"
