@@ -33,11 +33,19 @@ class AlarmForegroundService : Service() {
     private var nextAlarmTime: Long = 0
     private var wasOutsideTimeWindow = false   // neu
 
+    // Neu für mehrere Alarme
+    private lateinit var repository: ReminderRepository
+    private var activeReminders = mutableListOf<Reminder>()
+    private val timers = mutableMapOf<String, CountDownTimer>()   // id → Timer
+    private val nextAlarmTimes = mutableMapOf<String, Long>()     // id → nächste Zeit
+
     override fun onCreate() {
-        super.onCreate()
-        prefs = getSharedPreferences("interval_alarm_prefs", MODE_PRIVATE)
-        handler = Handler(Looper.getMainLooper())
-        createNotificationChannels()
+    super.onCreate()
+    prefs = getSharedPreferences("interval_alarm_prefs", MODE_PRIVATE)
+    repository = ReminderRepository(this)
+    handler = Handler(Looper.getMainLooper())
+    createNotificationChannels()
+  }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -79,30 +87,41 @@ class AlarmForegroundService : Service() {
     }
 
     private fun startAlarm() {
-        if (isRunning) return
+    if (isRunning) return
 
-        isRunning = true
-        wasOutsideTimeWindow = false
+    // Alle Erinnerungen laden
+    activeReminders = repository.loadReminders()
+        .filter { it.enabled && !it.fileUri.isNullOrBlank() }
+        .toMutableList()
 
-        // WakeLock holen damit CPU nicht schlafen geht
-        val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = pm.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "IntervalAlarm::WakeLock"
-        ).apply {
-            acquire(24 * 60 * 60 * 1000L) // Max 24 Stunden
-        }
-
-        // Foreground Service starten mit Notification
-        val notification = buildServiceNotification("Alarm aktiv - Warte auf nächsten Alarm...")
-        startForeground(NOTIFICATION_ID, notification)
-
-        // Ersten Timer starten
-        startNextTimer()
-
-        Log.d(TAG, "Alarm Service gestartet")
+    if (activeReminders.isEmpty()) {
+        Log.w(TAG, "Keine aktiven Erinnerungen mit Audiodatei gefunden")
+        stopSelf()
+        return
     }
 
+    isRunning = true
+
+    // WakeLock
+    val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+    wakeLock = pm.newWakeLock(
+        PowerManager.PARTIAL_WAKE_LOCK,
+        "IntervalAlarm::WakeLock"
+    ).apply {
+        acquire(24 * 60 * 60 * 1000L)
+    }
+
+    // Foreground starten
+    val notification = buildServiceNotification("${activeReminders.size} Erinnerung(en) aktiv")
+    startForeground(NOTIFICATION_ID, notification)
+
+    // Für jede Erinnerung einen Timer starten
+    for (reminder in activeReminders) {
+        startTimerForReminder(reminder)
+    }
+
+    Log.d(TAG, "Service gestartet mit ${activeReminders.size} Erinnerungen")
+}
     private fun stopAlarm() {
         isRunning = false
 
