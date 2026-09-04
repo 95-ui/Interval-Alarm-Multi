@@ -29,12 +29,18 @@ class MainActivity : AppCompatActivity() {
         loadReminders()
     }
 
+    override fun onResume() {
+        super.onResume()
+        loadReminders() // Liste aktualisieren, falls etwas bearbeitet wurde
+    }
+
     private fun setupRecyclerView() {
         adapter = ReminderAdapter(
             reminders = reminders,
             onEdit = { reminder ->
-                // Später: Bearbeitungsbildschirm öffnen
-                Toast.makeText(this, "Bearbeiten: ${reminder.name}", Toast.LENGTH_SHORT).show()
+                val intent = Intent(this, EditReminderActivity::class.java)
+                intent.putExtra("reminder_id", reminder.id)
+                startActivity(intent)
             },
             onDelete = { reminder ->
                 confirmDelete(reminder)
@@ -56,13 +62,9 @@ class MainActivity : AppCompatActivity() {
 
     private fun setupButtons() {
         binding.fabAdd.setOnClickListener {
-            // Neue Erinnerung anlegen
-            val newReminder = Reminder(name = "Neue Erinnerung ${reminders.size + 1}")
-            reminders.add(newReminder)
-            repository.saveReminders(reminders)
-            adapter.notifyItemInserted(reminders.size - 1)
-            updateEmptyView()
-            Toast.makeText(this, "Erinnerung hinzugefügt", Toast.LENGTH_SHORT).show()
+            // Neue Erinnerung → Bearbeitungsbildschirm öffnen
+            val intent = Intent(this, EditReminderActivity::class.java)
+            startActivity(intent)
         }
 
         binding.btnStartAll.setOnClickListener {
