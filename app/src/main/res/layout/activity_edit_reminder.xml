@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true"
+    android:background="#FAFAFA">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Erinnerung bearbeiten"
+            android:textSize="20sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Name -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Name"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp" />
+        <EditText
+            android:id="@+id/etName"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="z.B. Trinken, Augenpause..."
+            android:inputType="text"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Audiodatei -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Audiodatei"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp" />
+        <TextView
+            android:id="@+id/tvSelectedFile"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Keine Datei gewählt"
+            android:layout_marginBottom="8dp" />
+        <Button
+            android:id="@+id/btnSelectFile"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Datei wählen"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Intervall -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Intervall"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+            <EditText
+                android:id="@+id/etIntervalValue"
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:text="5"
+                android:gravity="center" />
+            <Spinner
+                android:id="@+id/spinnerUnit"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:entries="@array/interval_units" />
+        </LinearLayout>
+
+        <!-- Lautstärke -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Lautstärke"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp" />
+        <TextView
+            android:id="@+id/tvVolumePercent"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="80%"
+            android:layout_marginBottom="4dp" />
+        <SeekBar
+            android:id="@+id/seekBarVolume"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:max="100"
+            android:progress="80"
+            android:layout_marginBottom="16dp" />
+
+        <!-- Abspieldauer begrenzen -->
+        <CheckBox
+            android:id="@+id/cbLimitDuration"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Abspieldauer begrenzen" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+            <EditText
+                android:id="@+id/etMaxSeconds"
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:inputType="number"
+                android:text="10"
+                android:enabled="false" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=" Sekunden"
+                android:layout_gravity="center_vertical" />
+        </LinearLayout>
+
+        <!-- Zeitfenster -->
+        <CheckBox
+            android:id="@+id/cbTimeWindow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Zeitfenster festlegen" />
+        <LinearLayout
+            android:id="@+id/layoutTimeWindow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:visibility="gone"
+            android:layout_marginBottom="16dp">
+            <Button
+                android:id="@+id/btnStartTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="08:00" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="  bis  "
+                android:layout_gravity="center_vertical" />
+            <Button
+                android:id="@+id/btnEndTime"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="22:00" />
+        </LinearLayout>
+
+        <!-- Benachrichtigung -->
+        <CheckBox
+            android:id="@+id/cbCustomNotification"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Eigener Text bei Alarm" />
+        <EditText
+            android:id="@+id/etNotificationText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Zeit für eine Pause! ⏰"
+            android:enabled="false"
+            android:layout_marginBottom="24dp" />
+
+        <!-- Speichern / Abbrechen -->
+        <Button
+            android:id="@+id/btnSave"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Speichern"
+            android:layout_marginBottom="8dp" />
+        <Button
+            android:id="@+id/btnCancel"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Abbrechen"
+            style="@style/Widget.Material3.Button.OutlinedButton" />
+
+    </LinearLayout>
+</ScrollView>
