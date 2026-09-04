@@ -1,4 +1,4 @@
-package com.example.intervalalarm.multi
+package com.example.intervalalarm
 
 import android.content.Context
 import android.content.SharedPreferences
