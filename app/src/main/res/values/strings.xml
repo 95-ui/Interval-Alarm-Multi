@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Interval Alarm</string>
+    <string name="app_name">Interval Alarm Multi</string>
 
     <string-array name="interval_units">
         <item>Sekunden</item>
