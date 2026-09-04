@@ -1,4 +1,4 @@
-package com.example.intervalalarm
+package com.example.intervalalarm.multi
 
 import android.Manifest
 import android.app.TimePickerDialog
