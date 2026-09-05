@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:fillViewport="true"
-    android:background="#FAFAFA">
+    android:background="@color/navy">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -18,6 +18,7 @@
             android:text="Erinnerung bearbeiten"
             android:textSize="20sp"
             android:textStyle="bold"
+            android:textColor="@color/white"
             android:layout_marginBottom="16dp" />
 
         <!-- Name -->
@@ -26,11 +27,16 @@
             android:layout_height="wrap_content"
             android:text="Name"
             android:textStyle="bold"
+            android:textColor="@color/text_gray"
             android:layout_marginBottom="4dp" />
         <EditText
             android:id="@+id/etName"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="@drawable/edit_text_background"
+            android:padding="10dp"
+            android:textColor="@color/white"
+            android:textColorHint="@color/text_gray_dark"
             android:hint="z.B. Trinken, Augenpause..."
             android:inputType="text"
             android:layout_marginBottom="16dp" />
@@ -41,12 +47,14 @@
             android:layout_height="wrap_content"
             android:text="Audiodatei"
             android:textStyle="bold"
+            android:textColor="@color/text_gray"
             android:layout_marginBottom="4dp" />
         <TextView
             android:id="@+id/tvSelectedFile"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Keine Datei gewählt"
+            android:textColor="@color/text_gray"
             android:layout_marginBottom="8dp" />
         <Button
             android:id="@+id/btnSelectFile"
@@ -61,6 +69,7 @@
             android:layout_height="wrap_content"
             android:text="Intervall"
             android:textStyle="bold"
+            android:textColor="@color/text_gray"
             android:layout_marginBottom="4dp" />
         <LinearLayout
             android:layout_width="match_parent"
@@ -71,6 +80,9 @@
                 android:id="@+id/etIntervalValue"
                 android:layout_width="80dp"
                 android:layout_height="wrap_content"
+                android:background="@drawable/edit_text_background"
+                android:padding="10dp"
+                android:textColor="@color/white"
                 android:inputType="number"
                 android:text="5"
                 android:gravity="center" />
@@ -78,6 +90,7 @@
                 android:id="@+id/spinnerUnit"
                 android:layout_width="0dp"
                 android:layout_height="48dp"
+                android:layout_marginStart="8dp"
                 android:layout_weight="1"
                 android:entries="@array/interval_units" />
         </LinearLayout>
@@ -88,12 +101,14 @@
             android:layout_height="wrap_content"
             android:text="Lautstärke"
             android:textStyle="bold"
+            android:textColor="@color/text_gray"
             android:layout_marginBottom="4dp" />
         <TextView
             android:id="@+id/tvVolumePercent"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="80%"
+            android:textColor="@color/white"
             android:layout_marginBottom="4dp" />
         <SeekBar
             android:id="@+id/seekBarVolume"
@@ -108,16 +123,22 @@
             android:id="@+id/cbLimitDuration"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:textColor="@color/white"
             android:text="Abspieldauer begrenzen" />
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginTop="8dp"
             android:layout_marginBottom="16dp">
             <EditText
                 android:id="@+id/etMaxSeconds"
                 android:layout_width="80dp"
                 android:layout_height="wrap_content"
+                android:background="@drawable/edit_text_background"
+                android:padding="10dp"
+                android:textColor="@color/white"
                 android:inputType="number"
                 android:text="10"
                 android:enabled="false" />
@@ -125,6 +146,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text=" Sekunden"
+                android:textColor="@color/text_gray"
                 android:layout_gravity="center_vertical" />
         </LinearLayout>
 
@@ -133,13 +155,16 @@
             android:id="@+id/cbTimeWindow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:textColor="@color/white"
             android:text="Zeitfenster festlegen" />
         <LinearLayout
             android:id="@+id/layoutTimeWindow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
+            android:gravity="center_vertical"
             android:visibility="gone"
+            android:layout_marginTop="8dp"
             android:layout_marginBottom="16dp">
             <Button
                 android:id="@+id/btnStartTime"
@@ -150,6 +175,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="  bis  "
+                android:textColor="@color/text_gray"
                 android:layout_gravity="center_vertical" />
             <Button
                 android:id="@+id/btnEndTime"
@@ -163,13 +189,19 @@
             android:id="@+id/cbCustomNotification"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:textColor="@color/white"
             android:text="Eigener Text bei Alarm" />
         <EditText
             android:id="@+id/etNotificationText"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:background="@drawable/edit_text_background"
+            android:padding="10dp"
+            android:textColor="@color/white"
+            android:textColorHint="@color/text_gray_dark"
             android:hint="Zeit für eine Pause! ⏰"
             android:enabled="false"
+            android:layout_marginTop="8dp"
             android:layout_marginBottom="24dp" />
 
         <!-- Speichern / Abbrechen -->
