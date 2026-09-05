@@ -1,17 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Primary Colors -->
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    
-    <!-- Secondary Colors -->
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
-    
-    <!-- Text Colors -->
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
-    <color name="dark_gray">#FF757575</color>
-    <color name="light_gray">#FFCCCCCC</color>
+    <!-- Marken-/Akzentfarben der App -->
+    <color name="pink_red">#E94560</color>
+    <color name="pink_red_dark">#C62828</color>
+    <color name="cyan">#00D9FF</color>
+
+    <!-- Dunkles Grunddesign -->
+    <color name="navy">#1A1A2E</color>
+    <color name="navy_dark">#0F0F23</color>
+    <color name="navy_card">#16213E</color>
+
+    <!-- Text auf dunklem Hintergrund -->
+    <color name="white">#FFFFFF</color>
+    <color name="text_gray">#BBBBBB</color>
+    <color name="text_gray_dark">#888888</color>
+
+    <!-- Text auf hellen Karten (z. B. Erinnerungs-Liste) -->
+    <color name="card_background">#FFFFFF</color>
+    <color name="card_text_dark">#212121</color>
+    <color name="card_text_gray">#757575</color>
+    <color name="card_text_light_gray">#9E9E9E</color>
+
+    <color name="black">#000000</color>
 </resources>
