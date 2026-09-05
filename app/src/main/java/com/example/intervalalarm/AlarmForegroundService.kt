@@ -18,7 +18,14 @@ class AlarmForegroundService : Service() {
         const val CHANNEL_ID = "interval_alarm_channel"
         const val CHANNEL_ALARM_ID = "interval_alarm_alert_channel"
         const val NOTIFICATION_ID = 1
+        const val PREFS_NAME = "interval_alarm_prefs"
         private const val TAG = "AlarmForegroundService"
+
+        /** Key, unter dem der Zeitpunkt der nächsten Auslösung einer
+         *  Erinnerung gespeichert wird. Wird auch von MainActivity/Adapter
+         *  gelesen, um einen Countdown IN DER APP anzuzeigen – unabhängig
+         *  davon, ob Benachrichtigungen erlaubt sind. */
+        fun nextAlarmKey(reminderId: String) = "next_alarm_$reminderId"
     }
 
     private lateinit var prefs: SharedPreferences
@@ -32,11 +39,8 @@ class AlarmForegroundService : Service() {
     private val timers = mutableMapOf<String, CountDownTimer>()
     private val nextAlarmTimes = mutableMapOf<String, Long>()
 
-    // WICHTIG: jede Erinnerung bekommt ihren EIGENEN MediaPlayer.
-    // Vorher gab es nur einen einzigen MediaPlayer für alle Erinnerungen –
-    // dadurch hat eine neu startende Erinnerung den Ton einer anderen,
-    // gerade laufenden Erinnerung abgewürgt. Jetzt läuft jeder Ton wirklich
-    // unabhängig von den anderen.
+    // Jede Erinnerung bekommt ihren EIGENEN MediaPlayer, damit sich mehrere
+    // Töne nicht gegenseitig abwürgen.
     private val mediaPlayers = mutableMapOf<String, MediaPlayer>()
     private val stopCallbacks = mutableMapOf<String, Runnable>()
 
@@ -46,7 +50,7 @@ class AlarmForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        prefs = getSharedPreferences("interval_alarm_prefs", MODE_PRIVATE)
+        prefs = getSharedPreferences(PREFS_NAME, MODE_PRIVATE)
         repository = ReminderRepository(this)
         handler = Handler(Looper.getMainLooper())
         createNotificationChannels()
@@ -112,6 +116,10 @@ class AlarmForegroundService : Service() {
 
         if (activeReminders.isEmpty()) {
             Log.w(TAG, "Keine aktiven Erinnerungen mit Audiodatei gefunden")
+            // WICHTIG: erst kurz in den Vordergrund gehen, dann stoppen.
+            // Ein Service, der über startForegroundService() gestartet wurde,
+            // MUSS startForeground() aufrufen – sonst stürzt die App ab.
+            startForeground(NOTIFICATION_ID, buildServiceNotification("Keine aktiven Erinnerungen"))
             stopSelf()
             return
         }
@@ -149,14 +157,17 @@ class AlarmForegroundService : Service() {
         val intervalMs = reminder.getIntervalMs()
         if (intervalMs <= 0) return
 
-        nextAlarmTimes[reminder.id] = System.currentTimeMillis() + intervalMs
+        val nextTime = System.currentTimeMillis() + intervalMs
+        nextAlarmTimes[reminder.id] = nextTime
+        // Für die App-eigene Countdown-Anzeige speichern (funktioniert auch
+        // ganz ohne Benachrichtigungsberechtigung).
+        prefs.edit().putLong(nextAlarmKey(reminder.id), nextTime).apply()
 
         val timer = object : CountDownTimer(intervalMs, 1000) {
             override fun onTick(millisUntilFinished: Long) {
-                // Die Restzeit steht bereits in nextAlarmTimes[reminder.id];
-                // der zentrale Ticker (startTicker) liest sie für die
-                // Benachrichtigung aus, damit wir nicht jede Sekunde pro
-                // Erinnerung einzeln etwas aktualisieren müssen.
+                // Die Restzeit steht bereits in nextAlarmTimes[reminder.id]
+                // bzw. in den SharedPreferences; der zentrale Ticker
+                // (startTicker) und die MainActivity lesen sie von dort.
             }
 
             override fun onFinish() {
@@ -169,7 +180,7 @@ class AlarmForegroundService : Service() {
 
                 playAlarmSound(reminder)
 
-                if (reminder.customNotification) {
+                if (reminder.showNotification) {
                     showAlarmNotification(reminder)
                 }
 
@@ -221,6 +232,15 @@ class AlarmForegroundService : Service() {
             timer.cancel()
         }
         timers.clear()
+
+        // Countdown-Werte in den SharedPreferences aufräumen, damit die
+        // App-Liste danach "gestoppt" statt einer eingefrorenen Zahl zeigt.
+        val editor = prefs.edit()
+        for (reminder in activeReminders) {
+            editor.remove(nextAlarmKey(reminder.id))
+        }
+        editor.apply()
+
         nextAlarmTimes.clear()
         activeReminders.clear()
 
@@ -256,6 +276,12 @@ class AlarmForegroundService : Service() {
                 setOnCompletionListener {
                     stopMediaPlayerFor(reminder.id)
                 }
+                setOnErrorListener { _, what, extra ->
+                    Log.e(TAG, "MediaPlayer Fehler bei \"${reminder.name}\": what=$what extra=$extra")
+                    showPlaybackErrorNotification(reminder)
+                    stopMediaPlayerFor(reminder.id)
+                    true
+                }
                 prepare()
                 start()
             }
@@ -269,8 +295,24 @@ class AlarmForegroundService : Service() {
 
             Log.d(TAG, "Alarm Sound für \"${reminder.name}\" wird abgespielt")
         } catch (e: Exception) {
+            // Wichtig: Fehler NICHT nur ins (für den Nutzer unsichtbare) Log
+            // schreiben, sondern auch als Benachrichtigung anzeigen –
+            // sonst merkt man als Nutzer nie, warum kein Ton kommt.
             Log.e(TAG, "Fehler beim Abspielen von ${reminder.name}: ${e.message}")
+            showPlaybackErrorNotification(reminder)
         }
+    }
+
+    private fun showPlaybackErrorNotification(reminder: Reminder) {
+        val notification = NotificationCompat.Builder(this, CHANNEL_ALARM_ID)
+            .setSmallIcon(android.R.drawable.ic_dialog_alert)
+            .setContentTitle("⚠️ Ton konnte nicht abgespielt werden")
+            .setContentText("\"${reminder.name}\": Bitte die Audiodatei in den Einstellungen erneut auswählen.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setAutoCancel(true)
+            .build()
+        val manager = getSystemService(NotificationManager::class.java)
+        manager.notify(("error_" + reminder.id).hashCode(), notification)
     }
 
     private fun stopMediaPlayerFor(reminderId: String) {
