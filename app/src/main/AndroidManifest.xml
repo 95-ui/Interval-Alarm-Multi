@@ -11,9 +11,9 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
-    <!-- Exakten Alarm planen (Android 12+) -->
-    <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
-    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <!-- SCHEDULE_EXACT_ALARM / USE_EXACT_ALARM entfernt: die App nutzt gar
+         keinen AlarmManager (nur CountDownTimer im Service), diese beiden
+         Berechtigungen wurden nie gebraucht. -->
 
     <application
         android:allowBackup="true"
@@ -44,11 +44,6 @@
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
-        <!-- Alarm-Empfänger: wird aufgerufen wenn der Alarm feuert -->
-        <receiver
-            android:name=".AlarmReceiver"
-            android:exported="false" />
-
         <!-- Boot-Empfänger: startet Alarm nach Neustart neu -->
         <receiver
             android:name=".BootReceiver"
@@ -57,6 +52,10 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- AlarmReceiver wurde entfernt: er war registriert, wurde aber nie
+             von irgendwo im Code ausgelöst (kein AlarmManager im Projekt) –
+             toter Code. Die Datei AlarmReceiver.kt kann gelöscht werden. -->
 
     </application>
 </manifest>
