@@ -22,16 +22,27 @@ class AlarmForegroundService : Service() {
     }
 
     private lateinit var prefs: SharedPreferences
-    private var mediaPlayer: MediaPlayer? = null
     private var handler: Handler? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var isRunning = false
 
-    // Mehrere Alarme
+    // Mehrere, unabhängige Alarme
     private lateinit var repository: ReminderRepository
     private var activeReminders = mutableListOf<Reminder>()
     private val timers = mutableMapOf<String, CountDownTimer>()
     private val nextAlarmTimes = mutableMapOf<String, Long>()
+
+    // WICHTIG: jede Erinnerung bekommt ihren EIGENEN MediaPlayer.
+    // Vorher gab es nur einen einzigen MediaPlayer für alle Erinnerungen –
+    // dadurch hat eine neu startende Erinnerung den Ton einer anderen,
+    // gerade laufenden Erinnerung abgewürgt. Jetzt läuft jeder Ton wirklich
+    // unabhängig von den anderen.
+    private val mediaPlayers = mutableMapOf<String, MediaPlayer>()
+    private val stopCallbacks = mutableMapOf<String, Runnable>()
+
+    // Aktualisiert einmal pro Sekunde die Dauer-Benachrichtigung mit dem
+    // Countdown bis zur nächsten fälligen Erinnerung.
+    private var tickerRunnable: Runnable? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -45,6 +56,23 @@ class AlarmForegroundService : Service() {
         when (intent?.action) {
             "START_ALARM" -> startAlarm()
             "STOP_ALARM" -> stopAlarm()
+            else -> {
+                // Der Service wurde vom System neu gestartet (z. B. weil der
+                // Prozess gekillt wurde), ohne dass wir explizit START_ALARM
+                // geschickt haben. Falls die Alarme vorher liefen, machen wir
+                // sofort weiter. Android verlangt außerdem, dass ein Service,
+                // der vorher im Vordergrund lief, nach einem Neustart erneut
+                // sehr schnell startForeground() aufruft – sonst kann es zum
+                // Absturz kommen.
+                if (!isRunning) {
+                    if (prefs.getBoolean("alarm_was_running", false)) {
+                        startAlarm()
+                    } else {
+                        startForeground(NOTIFICATION_ID, buildServiceNotification("Bereit"))
+                        stopSelf()
+                    }
+                }
+            }
         }
         return START_STICKY
     }
@@ -89,6 +117,9 @@ class AlarmForegroundService : Service() {
         }
 
         isRunning = true
+        // Merken, dass die Alarme laufen -> der BootReceiver liest genau
+        // dieses Flag nach einem Geräte-Neustart aus.
+        prefs.edit().putBoolean("alarm_was_running", true).apply()
 
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(
@@ -98,12 +129,16 @@ class AlarmForegroundService : Service() {
             acquire(24 * 60 * 60 * 1000L)
         }
 
-        val notification = buildServiceNotification("${activeReminders.size} Erinnerung(en) aktiv")
-        startForeground(NOTIFICATION_ID, notification)
+        startForeground(
+            NOTIFICATION_ID,
+            buildServiceNotification("${activeReminders.size} Erinnerung(en) aktiv")
+        )
 
         for (reminder in activeReminders) {
             startTimerForReminder(reminder)
         }
+
+        startTicker()
 
         Log.d(TAG, "Service gestartet mit ${activeReminders.size} Erinnerungen")
     }
@@ -118,11 +153,16 @@ class AlarmForegroundService : Service() {
 
         val timer = object : CountDownTimer(intervalMs, 1000) {
             override fun onTick(millisUntilFinished: Long) {
-                // Später können wir hier den Countdown pro Erinnerung aktualisieren
+                // Die Restzeit steht bereits in nextAlarmTimes[reminder.id];
+                // der zentrale Ticker (startTicker) liest sie für die
+                // Benachrichtigung aus, damit wir nicht jede Sekunde pro
+                // Erinnerung einzeln etwas aktualisieren müssen.
             }
 
             override fun onFinish() {
                 if (reminder.useTimeWindow && !isWithinTimeWindow(reminder)) {
+                    // Außerhalb des Zeitfensters: einfach weiterzählen,
+                    // ohne den Ton abzuspielen.
                     startTimerForReminder(reminder)
                     return
                 }
@@ -141,8 +181,41 @@ class AlarmForegroundService : Service() {
         timer.start()
     }
 
+    /** Läuft jede Sekunde, solange der Service aktiv ist, und zeigt in der
+     *  Dauer-Benachrichtigung an, wann die nächste Erinnerung fällig ist. */
+    private fun startTicker() {
+        tickerRunnable?.let { handler?.removeCallbacks(it) }
+        tickerRunnable = object : Runnable {
+            override fun run() {
+                if (!isRunning) return
+                updateServiceNotification(buildCountdownText())
+                handler?.postDelayed(this, 1000L)
+            }
+        }
+        handler?.post(tickerRunnable!!)
+    }
+
+    private fun buildCountdownText(): String {
+        val fallback = "${activeReminders.size} Erinnerung(en) aktiv"
+        if (nextAlarmTimes.isEmpty()) return fallback
+
+        val nextEntry = nextAlarmTimes.minByOrNull { it.value } ?: return fallback
+        val reminder = activeReminders.find { it.id == nextEntry.key } ?: return fallback
+
+        val remaining = (nextEntry.value - System.currentTimeMillis()).coerceAtLeast(0L)
+        val minutes = remaining / 60000
+        val seconds = (remaining % 60000) / 1000
+
+        return "Nächste: ${reminder.name} in %02d:%02d · ${activeReminders.size} aktiv"
+            .format(minutes, seconds)
+    }
+
     private fun stopAlarm() {
         isRunning = false
+        prefs.edit().putBoolean("alarm_was_running", false).apply()
+
+        tickerRunnable?.let { handler?.removeCallbacks(it) }
+        tickerRunnable = null
 
         for (timer in timers.values) {
             timer.cancel()
@@ -151,7 +224,7 @@ class AlarmForegroundService : Service() {
         nextAlarmTimes.clear()
         activeReminders.clear()
 
-        stopMediaPlayer()
+        stopAllMediaPlayers()
 
         wakeLock?.let {
             if (it.isHeld) it.release()
@@ -165,13 +238,13 @@ class AlarmForegroundService : Service() {
     }
 
     private fun playAlarmSound(reminder: Reminder) {
-        stopMediaPlayer()
+        stopMediaPlayerFor(reminder.id)
 
         val fileUri = reminder.fileUri ?: return
         val volume = reminder.volume / 100f
 
         try {
-            mediaPlayer = MediaPlayer().apply {
+            val player = MediaPlayer().apply {
                 setAudioAttributes(
                     AudioAttributes.Builder()
                         .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
@@ -180,18 +253,18 @@ class AlarmForegroundService : Service() {
                 )
                 setDataSource(this@AlarmForegroundService, Uri.parse(fileUri))
                 setVolume(volume, volume)
+                setOnCompletionListener {
+                    stopMediaPlayerFor(reminder.id)
+                }
                 prepare()
                 start()
             }
+            mediaPlayers[reminder.id] = player
 
             if (reminder.limitDuration) {
-                handler?.postDelayed({
-                    stopMediaPlayer()
-                }, reminder.maxSeconds * 1000L)
-            } else {
-                mediaPlayer?.setOnCompletionListener {
-                    stopMediaPlayer()
-                }
+                val stopCallback = Runnable { stopMediaPlayerFor(reminder.id) }
+                stopCallbacks[reminder.id] = stopCallback
+                handler?.postDelayed(stopCallback, reminder.maxSeconds * 1000L)
             }
 
             Log.d(TAG, "Alarm Sound für \"${reminder.name}\" wird abgespielt")
@@ -200,14 +273,21 @@ class AlarmForegroundService : Service() {
         }
     }
 
-    private fun stopMediaPlayer() {
-        mediaPlayer?.let {
+    private fun stopMediaPlayerFor(reminderId: String) {
+        stopCallbacks.remove(reminderId)?.let { handler?.removeCallbacks(it) }
+        mediaPlayers.remove(reminderId)?.let { player ->
             try {
-                if (it.isPlaying) it.stop()
-                it.release()
-            } catch (_: Exception) {}
+                if (player.isPlaying) player.stop()
+                player.release()
+            } catch (_: Exception) {
+            }
         }
-        mediaPlayer = null
+    }
+
+    private fun stopAllMediaPlayers() {
+        for (id in mediaPlayers.keys.toList()) {
+            stopMediaPlayerFor(id)
+        }
     }
 
     private fun isWithinTimeWindow(reminder: Reminder): Boolean {
@@ -286,6 +366,8 @@ class AlarmForegroundService : Service() {
 
     override fun onDestroy() {
         super.onDestroy()
-        stopAlarm()
+        if (isRunning) {
+            stopAlarm()
+        }
     }
 }
