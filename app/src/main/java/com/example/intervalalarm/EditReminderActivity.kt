@@ -3,8 +3,12 @@ package com.example.intervalalarm
 import android.app.Activity
 import android.app.TimePickerDialog
 import android.content.Intent
+import android.media.AudioAttributes
+import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.provider.OpenableColumns
 import android.view.View
 import android.widget.SeekBar
@@ -21,6 +25,11 @@ class EditReminderActivity : AppCompatActivity() {
     private var reminderId: String? = null
     private var currentFileUri: String? = null
     private var currentFileName: String = "Keine Datei gewählt"
+
+    // Für den Testton in diesem Bildschirm
+    private var testPlayer: MediaPlayer? = null
+    private val testHandler = Handler(Looper.getMainLooper())
+    private var testStopCallback: Runnable? = null
 
     private val filePickerLauncher = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -85,9 +94,16 @@ class EditReminderActivity : AppCompatActivity() {
             filePickerLauncher.launch(arrayOf("audio/*"))
         }
 
+        binding.btnTestPlay.setOnClickListener { startTestPlayback() }
+        binding.btnStopTest.setOnClickListener { stopTestPlayback() }
+
         binding.seekBarVolume.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 binding.tvVolumePercent.text = "$progress%"
+                testPlayer?.let {
+                    val v = progress / 100f
+                    it.setVolume(v, v)
+                }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
@@ -125,6 +141,78 @@ class EditReminderActivity : AppCompatActivity() {
 
         binding.btnSave.setOnClickListener { saveReminder() }
         binding.btnCancel.setOnClickListener { finish() }
+    }
+
+    /** Spielt die aktuell gewählte Datei testweise ab – mit der gerade
+     *  eingestellten Lautstärke und, falls angehakt, der Abspieldauer-
+     *  Begrenzung. So kann man vor dem Speichern prüfen, ob die Datei
+     *  überhaupt funktioniert. */
+    private fun startTestPlayback() {
+        val fileUri = currentFileUri
+        if (fileUri.isNullOrBlank()) {
+            Toast.makeText(this, "Bitte zuerst eine Audiodatei wählen", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        stopTestPlayback()
+
+        try {
+            val volume = binding.seekBarVolume.progress / 100f
+            testPlayer = MediaPlayer().apply {
+                setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .build()
+                )
+                setDataSource(this@EditReminderActivity, Uri.parse(fileUri))
+                setVolume(volume, volume)
+                setOnCompletionListener { stopTestPlayback() }
+                setOnErrorListener { _, _, _ ->
+                    Toast.makeText(this@EditReminderActivity, "Datei konnte nicht abgespielt werden", Toast.LENGTH_SHORT).show()
+                    stopTestPlayback()
+                    true
+                }
+                prepare()
+                start()
+            }
+
+            binding.btnTestPlay.visibility = View.GONE
+            binding.btnStopTest.visibility = View.VISIBLE
+
+            if (binding.cbLimitDuration.isChecked) {
+                val maxSeconds = binding.etMaxSeconds.text.toString().toIntOrNull() ?: 10
+                val callback = Runnable { stopTestPlayback() }
+                testStopCallback = callback
+                testHandler.postDelayed(callback, maxSeconds * 1000L)
+            }
+        } catch (e: Exception) {
+            Toast.makeText(this, "Datei konnte nicht abgespielt werden: ${e.message}", Toast.LENGTH_LONG).show()
+            stopTestPlayback()
+        }
+    }
+
+    private fun stopTestPlayback() {
+        testStopCallback?.let { testHandler.removeCallbacks(it) }
+        testStopCallback = null
+
+        testPlayer?.let {
+            try {
+                if (it.isPlaying) it.stop()
+                it.release()
+            } catch (_: Exception) {
+            }
+        }
+        testPlayer = null
+
+        binding.btnTestPlay.visibility = View.VISIBLE
+        binding.btnStopTest.visibility = View.GONE
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // Testton nicht weiterlaufen lassen, wenn man den Bildschirm verlässt
+        stopTestPlayback()
     }
 
     private fun saveReminder() {
