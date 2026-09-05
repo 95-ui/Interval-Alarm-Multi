@@ -5,6 +5,8 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.view.View
 import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
@@ -21,17 +23,26 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adapter: ReminderAdapter
     private val reminders = mutableListOf<Reminder>()
 
+    // Aktualisiert die Countdown-Anzeige jede Sekunde, solange der
+    // Bildschirm sichtbar ist. Läuft rein in der App, unabhängig von
+    // Benachrichtigungsberechtigungen.
+    private val countdownHandler = Handler(Looper.getMainLooper())
+    private val countdownTicker = object : Runnable {
+        override fun run() {
+            adapter.notifyDataSetChanged()
+            countdownHandler.postDelayed(this, 1000L)
+        }
+    }
+
     // Ab Android 13 (Tiramisu) muss die Benachrichtigungs-Berechtigung
-    // zur Laufzeit angefragt werden. Ohne das würde man die
-    // Dauer-Benachrichtigung mit dem Countdown und den Alarm-Hinweis nie zu
-    // sehen bekommen.
+    // zur Laufzeit angefragt werden.
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (!granted) {
             Toast.makeText(
                 this,
-                "Ohne Benachrichtigungs-Berechtigung siehst du den Countdown nicht in der Statusleiste",
+                "Ohne Benachrichtigungs-Berechtigung siehst du den Alarm-Hinweis nicht in der Statusleiste",
                 Toast.LENGTH_LONG
             ).show()
         }
@@ -53,6 +64,12 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         loadReminders()
+        countdownHandler.post(countdownTicker)
+    }
+
+    override fun onPause() {
+        super.onPause()
+        countdownHandler.removeCallbacks(countdownTicker)
     }
 
     private fun requestNotificationPermissionIfNeeded() {
