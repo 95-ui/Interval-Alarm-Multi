@@ -1,12 +1,16 @@
 package com.example.intervalalarm
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.view.View
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.intervalalarm.databinding.ActivityMainBinding
 
@@ -16,6 +20,22 @@ class MainActivity : AppCompatActivity() {
     private lateinit var repository: ReminderRepository
     private lateinit var adapter: ReminderAdapter
     private val reminders = mutableListOf<Reminder>()
+
+    // Ab Android 13 (Tiramisu) muss die Benachrichtigungs-Berechtigung
+    // zur Laufzeit angefragt werden. Ohne das würde man die
+    // Dauer-Benachrichtigung mit dem Countdown und den Alarm-Hinweis nie zu
+    // sehen bekommen.
+    private val notificationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (!granted) {
+            Toast.makeText(
+                this,
+                "Ohne Benachrichtigungs-Berechtigung siehst du den Countdown nicht in der Statusleiste",
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,11 +47,24 @@ class MainActivity : AppCompatActivity() {
         setupRecyclerView()
         setupButtons()
         loadReminders()
+        requestNotificationPermissionIfNeeded()
     }
 
     override fun onResume() {
         super.onResume()
         loadReminders()
+    }
+
+    private fun requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            val granted = ContextCompat.checkSelfPermission(
+                this, Manifest.permission.POST_NOTIFICATIONS
+            ) == PackageManager.PERMISSION_GRANTED
+
+            if (!granted) {
+                notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
     }
 
     private fun setupRecyclerView() {
