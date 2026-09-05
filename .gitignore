@@ -1,0 +1,8 @@
+# Von Gradle/Android Studio generierte Ordner – nicht ins Repo einchecken.
+/app/build/
+/build/
+/.gradle/
+*.iml
+.idea/
+local.properties
+.DS_Store
