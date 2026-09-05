@@ -61,7 +61,33 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Datei wählen"
-            android:layout_marginBottom="16dp" />
+            android:layout_marginBottom="8dp" />
+
+        <!-- Testton abspielen -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="16dp">
+            <Button
+                android:id="@+id/btnTestPlay"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textSize="14sp"
+                android:text="▶ Test abspielen"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+            <Button
+                android:id="@+id/btnStopTest"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:textSize="14sp"
+                android:text="⏹ Stopp"
+                android:visibility="gone"
+                style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
+        </LinearLayout>
 
         <!-- Intervall -->
         <TextView
@@ -211,12 +237,21 @@
             android:layout_height="wrap_content"
             android:text="Speichern"
             android:layout_marginBottom="8dp" />
+
+        <!--
+          WICHTIG: style muss zur MaterialComponents-Familie des Theme
+          passen (siehe themes.xml). Vorher wurde hier fälschlicherweise
+          ein Material3-Style auf einem MaterialComponents-Theme verwendet
+          -> Textgröße wurde falsch/winzig aufgelöst. Zusätzlich textSize
+          explizit gesetzt, damit "Abbrechen" garantiert lesbar ist.
+        -->
         <Button
             android:id="@+id/btnCancel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Abbrechen"
-            style="@style/Widget.Material3.Button.OutlinedButton" />
+            android:textSize="16sp"
+            style="@style/Widget.MaterialComponents.Button.OutlinedButton" />
 
     </LinearLayout>
 </ScrollView>
