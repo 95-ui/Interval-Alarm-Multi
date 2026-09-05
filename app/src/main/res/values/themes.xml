@@ -1,12 +1,40 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.IntervalAlarm" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <item name="colorPrimary">#E94560</item>
-        <item name="colorPrimaryVariant">#C62828</item>
-        <item name="colorOnPrimary">#FFFFFF</item>
-        <item name="colorSecondary">#00D9FF</item>
-        <item name="android:statusBarColor">#0F0F23</item>
-        <item name="android:navigationBarColor">#0F0F23</item>
-        <item name="android:windowBackground">#1A1A2E</item>
+    <!--
+      WICHTIG: Kein "DayNight" mehr als Parent!
+      Vorher: Theme.MaterialComponents.DayNight.NoActionBar
+      Das hat automatisch zwischen hellen/dunklen Standard-Textfarben
+      umgeschaltet, je nachdem ob das Handy im System-Dark-Mode war –
+      das war die Ursache für den weißen Text auf weißem Grund im
+      "Erinnerung bearbeiten"-Bildschirm.
+
+      Die App hat ein festes, eigenes dunkles Design (Pink/Cyan/Navy),
+      soll sich also NIE nach dem System richten. Deswegen jetzt
+      Theme.MaterialComponents.NoActionBar (das ist die dunkle
+      Basis-Variante von Material Components, ohne Day/Night-Umschaltung)
+      und alle wichtigen Text-/Hintergrundfarben explizit gesetzt.
+    -->
+    <style name="Theme.IntervalAlarm" parent="Theme.MaterialComponents.NoActionBar">
+        <item name="colorPrimary">@color/pink_red</item>
+        <item name="colorPrimaryVariant">@color/pink_red_dark</item>
+        <item name="colorOnPrimary">@color/white</item>
+        <item name="colorSecondary">@color/cyan</item>
+        <item name="colorOnSecondary">@color/navy_dark</item>
+
+        <!-- Oberflächen/Hintergrund -->
+        <item name="colorSurface">@color/navy</item>
+        <item name="colorOnSurface">@color/white</item>
+        <item name="android:colorBackground">@color/navy</item>
+
+        <!-- Standard-Textfarben für ALLE Bildschirme, die keine eigene
+             android:textColor gesetzt haben -->
+        <item name="android:textColorPrimary">@color/white</item>
+        <item name="android:textColorSecondary">@color/text_gray</item>
+        <item name="android:textColorHint">@color/text_gray_dark</item>
+        <item name="android:editTextColor">@color/white</item>
+
+        <item name="android:statusBarColor">@color/navy_dark</item>
+        <item name="android:navigationBarColor">@color/navy_dark</item>
+        <item name="android:windowBackground">@color/navy</item>
     </style>
 </resources>
