@@ -1,5 +1,6 @@
 package com.example.intervalalarm
 
+import android.content.Context
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -19,6 +20,7 @@ class ReminderAdapter(
         val tvName: TextView = view.findViewById(R.id.tvReminderName)
         val tvInterval: TextView = view.findViewById(R.id.tvReminderInterval)
         val tvFile: TextView = view.findViewById(R.id.tvReminderFile)
+        val tvCountdown: TextView = view.findViewById(R.id.tvCountdown)
         val switchEnabled: SwitchMaterial = view.findViewById(R.id.switchEnabled)
         val btnEdit: ImageButton = view.findViewById(R.id.btnEdit)
         val btnDelete: ImageButton = view.findViewById(R.id.btnDelete)
@@ -32,6 +34,7 @@ class ReminderAdapter(
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val reminder = reminders[position]
+        val context = holder.itemView.context
 
         holder.tvName.text = reminder.name
 
@@ -43,6 +46,8 @@ class ReminderAdapter(
         }
         holder.tvInterval.text = "Alle ${reminder.intervalValue} $unitText"
         holder.tvFile.text = reminder.fileName
+
+        holder.tvCountdown.text = buildCountdownText(context, reminder)
 
         // Schalter ohne Endlosschleife setzen
         holder.switchEnabled.setOnCheckedChangeListener(null)
@@ -56,4 +61,24 @@ class ReminderAdapter(
     }
 
     override fun getItemCount(): Int = reminders.size
+
+    /** Liest den von AlarmForegroundService gespeicherten nächsten
+     *  Auslöse-Zeitpunkt und baut daraus einen "mm:ss"-Countdown-Text.
+     *  Funktioniert unabhängig davon, ob Benachrichtigungen erlaubt sind. */
+    private fun buildCountdownText(context: Context, reminder: Reminder): String {
+        if (!reminder.enabled) return "Deaktiviert"
+
+        val prefs = context.getSharedPreferences(
+            AlarmForegroundService.PREFS_NAME, Context.MODE_PRIVATE
+        )
+        val key = AlarmForegroundService.nextAlarmKey(reminder.id)
+        if (!prefs.contains(key)) return "Gestoppt"
+
+        val nextTime = prefs.getLong(key, 0L)
+        val remaining = (nextTime - System.currentTimeMillis()).coerceAtLeast(0L)
+        val minutes = remaining / 60000
+        val seconds = (remaining % 60000) / 1000
+
+        return "Nächster Alarm in %02d:%02d".format(minutes, seconds)
+    }
 }
