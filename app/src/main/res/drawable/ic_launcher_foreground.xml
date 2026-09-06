@@ -3,15 +3,27 @@
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
-    android:viewportHeight="108"
-    android:tint="#FFFFFF">
+    android:viewportHeight="108">
 
-    <!-- Alarm-Glocke Icon -->
+    <!-- Große Haupt-Glocke -->
     <group
-        android:translateX="22"
-        android:translateY="22">
+        android:translateX="14"
+        android:translateY="28">
         <path
             android:fillColor="#FFFFFF"
+            android:pathData="M32,56c3.3,0 6,-2.7 6,-6L26,50c0,3.3 2.7,6 6,6zM50,42v-14c0,-8.3 -5.7,-15.2 -14,-17v-1.8c0,-2.2 -1.8,-4 -4,-4s-4,1.8 -4,4V11c-8.3,1.8 -14,8.7 -14,17v14l-4,4v2h44v-2l-4,-4z"/>
+    </group>
+
+    <!-- Kleine zweite Glocke in Cyan -> steht für "Multi" (mehrere
+         gleichzeitige Erinnerungen). Das ist der Hauptunterschied zum
+         Original-App-Icon (Version 1.0), das nur eine einzelne Glocke zeigt. -->
+    <group
+        android:translateX="56"
+        android:translateY="12"
+        android:scaleX="0.55"
+        android:scaleY="0.55">
+        <path
+            android:fillColor="#00D9FF"
             android:pathData="M32,56c3.3,0 6,-2.7 6,-6L26,50c0,3.3 2.7,6 6,6zM50,42v-14c0,-8.3 -5.7,-15.2 -14,-17v-1.8c0,-2.2 -1.8,-4 -4,-4s-4,1.8 -4,4V11c-8.3,1.8 -14,8.7 -14,17v14l-4,4v2h44v-2l-4,-4z"/>
     </group>
 </vector>
