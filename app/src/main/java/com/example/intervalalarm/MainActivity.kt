@@ -23,9 +23,6 @@ class MainActivity : AppCompatActivity() {
     private lateinit var adapter: ReminderAdapter
     private val reminders = mutableListOf<Reminder>()
 
-    // Aktualisiert die Countdown-Anzeige jede Sekunde, solange der
-    // Bildschirm sichtbar ist. Läuft rein in der App, unabhängig von
-    // Benachrichtigungsberechtigungen.
     private val countdownHandler = Handler(Looper.getMainLooper())
     private val countdownTicker = object : Runnable {
         override fun run() {
@@ -34,8 +31,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // Ab Android 13 (Tiramisu) muss die Benachrichtigungs-Berechtigung
-    // zur Laufzeit angefragt werden.
     private val notificationPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestPermission()
     ) { granted ->
@@ -98,6 +93,22 @@ class MainActivity : AppCompatActivity() {
             onToggle = { reminder, isEnabled ->
                 reminder.enabled = isEnabled
                 repository.saveReminders(reminders)
+
+                // Falls der Dienst gerade läuft, sofort live nachziehen –
+                // sonst würde die Änderung erst beim nächsten
+                // "Alle starten" wirken.
+                val servicePrefs = getSharedPreferences(
+                    AlarmForegroundService.PREFS_NAME, MODE_PRIVATE
+                )
+                if (servicePrefs.getBoolean(AlarmForegroundService.KEY_WAS_RUNNING, false)) {
+                    val intent = Intent(this, AlarmForegroundService::class.java).apply {
+                        action = "TOGGLE_REMINDER"
+                        putExtra("reminder_id", reminder.id)
+                        putExtra("enabled", isEnabled)
+                    }
+                    startService(intent)
+                }
+
                 Toast.makeText(
                     this,
                     if (isEnabled) "${reminder.name} aktiviert" else "${reminder.name} deaktiviert",
