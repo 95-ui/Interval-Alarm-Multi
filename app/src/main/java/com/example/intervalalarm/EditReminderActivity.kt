@@ -5,6 +5,7 @@ import android.app.TimePickerDialog
 import android.content.Intent
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -28,6 +29,7 @@ class EditReminderActivity : AppCompatActivity() {
 
     // Für den Testton in diesem Bildschirm
     private var testPlayer: MediaPlayer? = null
+    private var testEnhancer: LoudnessEnhancer? = null
     private val testHandler = Handler(Looper.getMainLooper())
     private var testStopCallback: Runnable? = null
 
@@ -84,9 +86,11 @@ class EditReminderActivity : AppCompatActivity() {
         binding.btnEndTime.text = String.format("%02d:%02d", reminder.endHour, reminder.endMinute)
         binding.layoutTimeWindow.visibility = if (reminder.useTimeWindow) View.VISIBLE else View.GONE
 
+        binding.cbShowNotification.isChecked = reminder.showNotification
         binding.cbCustomNotification.isChecked = reminder.customNotification
+        binding.cbCustomNotification.isEnabled = reminder.showNotification
         binding.etNotificationText.setText(reminder.notificationText)
-        binding.etNotificationText.isEnabled = reminder.customNotification
+        binding.etNotificationText.isEnabled = reminder.showNotification && reminder.customNotification
     }
 
     private fun setupUI() {
@@ -100,9 +104,8 @@ class EditReminderActivity : AppCompatActivity() {
         binding.seekBarVolume.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 binding.tvVolumePercent.text = "$progress%"
-                testPlayer?.let {
-                    val v = progress / 100f
-                    it.setVolume(v, v)
+                if (testPlayer != null) {
+                    applyTestVolume(progress)
                 }
             }
             override fun onStartTrackingTouch(seekBar: SeekBar?) {}
@@ -135,8 +138,16 @@ class EditReminderActivity : AppCompatActivity() {
             }, h, m, true).show()
         }
 
+        // "Benachrichtigung bei Alarm anzeigen" ist jetzt der Hauptschalter.
+        // "Eigener Text" ergibt nur Sinn, wenn überhaupt eine Benachrichtigung
+        // angezeigt wird.
+        binding.cbShowNotification.setOnCheckedChangeListener { _, isChecked ->
+            binding.cbCustomNotification.isEnabled = isChecked
+            binding.etNotificationText.isEnabled = isChecked && binding.cbCustomNotification.isChecked
+        }
+
         binding.cbCustomNotification.setOnCheckedChangeListener { _, isChecked ->
-            binding.etNotificationText.isEnabled = isChecked
+            binding.etNotificationText.isEnabled = isChecked && binding.cbShowNotification.isChecked
         }
 
         binding.btnSave.setOnClickListener { saveReminder() }
@@ -144,9 +155,8 @@ class EditReminderActivity : AppCompatActivity() {
     }
 
     /** Spielt die aktuell gewählte Datei testweise ab – mit der gerade
-     *  eingestellten Lautstärke und, falls angehakt, der Abspieldauer-
-     *  Begrenzung. So kann man vor dem Speichern prüfen, ob die Datei
-     *  überhaupt funktioniert. */
+     *  eingestellten Lautstärke (inkl. Verstärkung über 100%) und, falls
+     *  angehakt, der Abspieldauer-Begrenzung. */
     private fun startTestPlayback() {
         val fileUri = currentFileUri
         if (fileUri.isNullOrBlank()) {
@@ -157,7 +167,6 @@ class EditReminderActivity : AppCompatActivity() {
         stopTestPlayback()
 
         try {
-            val volume = binding.seekBarVolume.progress / 100f
             testPlayer = MediaPlayer().apply {
                 setAudioAttributes(
                     AudioAttributes.Builder()
@@ -166,7 +175,6 @@ class EditReminderActivity : AppCompatActivity() {
                         .build()
                 )
                 setDataSource(this@EditReminderActivity, Uri.parse(fileUri))
-                setVolume(volume, volume)
                 setOnCompletionListener { stopTestPlayback() }
                 setOnErrorListener { _, _, _ ->
                     Toast.makeText(this@EditReminderActivity, "Datei konnte nicht abgespielt werden", Toast.LENGTH_SHORT).show()
@@ -174,8 +182,10 @@ class EditReminderActivity : AppCompatActivity() {
                     true
                 }
                 prepare()
-                start()
             }
+
+            applyTestVolume(binding.seekBarVolume.progress)
+            testPlayer?.start()
 
             binding.btnTestPlay.visibility = View.GONE
             binding.btnStopTest.visibility = View.VISIBLE
@@ -192,9 +202,18 @@ class EditReminderActivity : AppCompatActivity() {
         }
     }
 
+    private fun applyTestVolume(progress: Int) {
+        val player = testPlayer ?: return
+        testEnhancer?.let { try { it.release() } catch (_: Exception) {} }
+        testEnhancer = VolumeHelper.apply(player, progress)
+    }
+
     private fun stopTestPlayback() {
         testStopCallback?.let { testHandler.removeCallbacks(it) }
         testStopCallback = null
+
+        testEnhancer?.let { try { it.release() } catch (_: Exception) {} }
+        testEnhancer = null
 
         testPlayer?.let {
             try {
@@ -211,7 +230,6 @@ class EditReminderActivity : AppCompatActivity() {
 
     override fun onPause() {
         super.onPause()
-        // Testton nicht weiterlaufen lassen, wenn man den Bildschirm verlässt
         stopTestPlayback()
     }
 
@@ -251,6 +269,7 @@ class EditReminderActivity : AppCompatActivity() {
                 r.startMinute = startParts.getOrNull(1)?.toIntOrNull() ?: 0
                 r.endHour = endParts.getOrNull(0)?.toIntOrNull() ?: 22
                 r.endMinute = endParts.getOrNull(1)?.toIntOrNull() ?: 0
+                r.showNotification = binding.cbShowNotification.isChecked
                 r.customNotification = binding.cbCustomNotification.isChecked
                 r.notificationText = binding.etNotificationText.text.toString()
             }
@@ -270,6 +289,7 @@ class EditReminderActivity : AppCompatActivity() {
                 startMinute = startParts.getOrNull(1)?.toIntOrNull() ?: 0,
                 endHour = endParts.getOrNull(0)?.toIntOrNull() ?: 22,
                 endMinute = endParts.getOrNull(1)?.toIntOrNull() ?: 0,
+                showNotification = binding.cbShowNotification.isChecked,
                 customNotification = binding.cbCustomNotification.isChecked,
                 notificationText = binding.etNotificationText.text.toString()
             )
