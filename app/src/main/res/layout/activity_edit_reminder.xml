@@ -136,11 +136,16 @@
             android:text="80%"
             android:textColor="@color/white"
             android:layout_marginBottom="4dp" />
+        <!--
+          Bis 100% = normale Lautstärke. Darüber (bis 200%) wird zusätzlich
+          elektronisch verstärkt (siehe VolumeHelper.kt) – nützlich bei
+          leise aufgenommenen MP3-Dateien.
+        -->
         <SeekBar
             android:id="@+id/seekBarVolume"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:max="100"
+            android:max="200"
             android:progress="80"
             android:layout_marginBottom="16dp" />
 
@@ -211,11 +216,26 @@
         </LinearLayout>
 
         <!-- Benachrichtigung -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Benachrichtigung"
+            android:textStyle="bold"
+            android:textColor="@color/text_gray"
+            android:layout_marginBottom="4dp" />
+        <CheckBox
+            android:id="@+id/cbShowNotification"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/white"
+            android:checked="true"
+            android:text="Benachrichtigung bei Alarm anzeigen" />
         <CheckBox
             android:id="@+id/cbCustomNotification"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textColor="@color/white"
+            android:layout_marginStart="24dp"
             android:text="Eigener Text bei Alarm" />
         <EditText
             android:id="@+id/etNotificationText"
@@ -227,6 +247,7 @@
             android:textColorHint="@color/text_gray_dark"
             android:hint="Zeit für eine Pause! ⏰"
             android:enabled="false"
+            android:layout_marginStart="24dp"
             android:layout_marginTop="8dp"
             android:layout_marginBottom="24dp" />
 
@@ -238,13 +259,6 @@
             android:text="Speichern"
             android:layout_marginBottom="8dp" />
 
-        <!--
-          WICHTIG: style muss zur MaterialComponents-Familie des Theme
-          passen (siehe themes.xml). Vorher wurde hier fälschlicherweise
-          ein Material3-Style auf einem MaterialComponents-Theme verwendet
-          -> Textgröße wurde falsch/winzig aufgelöst. Zusätzlich textSize
-          explizit gesetzt, damit "Abbrechen" garantiert lesbar ist.
-        -->
         <Button
             android:id="@+id/btnCancel"
             android:layout_width="match_parent"
