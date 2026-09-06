@@ -4,8 +4,13 @@ import android.app.*
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
+import android.graphics.Bitmap
+import android.graphics.Canvas
+import android.graphics.Color
+import android.graphics.Paint
 import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.media.audiofx.LoudnessEnhancer
 import android.net.Uri
 import android.os.*
 import android.util.Log
@@ -19,12 +24,12 @@ class AlarmForegroundService : Service() {
         const val CHANNEL_ALARM_ID = "interval_alarm_alert_channel"
         const val NOTIFICATION_ID = 1
         const val PREFS_NAME = "interval_alarm_prefs"
+        const val KEY_WAS_RUNNING = "alarm_was_running"
         private const val TAG = "AlarmForegroundService"
 
         /** Key, unter dem der Zeitpunkt der nächsten Auslösung einer
          *  Erinnerung gespeichert wird. Wird auch von MainActivity/Adapter
-         *  gelesen, um einen Countdown IN DER APP anzuzeigen – unabhängig
-         *  davon, ob Benachrichtigungen erlaubt sind. */
+         *  gelesen, um einen Countdown IN DER APP anzuzeigen. */
         fun nextAlarmKey(reminderId: String) = "next_alarm_$reminderId"
     }
 
@@ -32,8 +37,8 @@ class AlarmForegroundService : Service() {
     private var handler: Handler? = null
     private var wakeLock: PowerManager.WakeLock? = null
     private var isRunning = false
+    private var isMuted = false
 
-    // Mehrere, unabhängige Alarme
     private lateinit var repository: ReminderRepository
     private var activeReminders = mutableListOf<Reminder>()
     private val timers = mutableMapOf<String, CountDownTimer>()
@@ -43,6 +48,7 @@ class AlarmForegroundService : Service() {
     // Töne nicht gegenseitig abwürgen.
     private val mediaPlayers = mutableMapOf<String, MediaPlayer>()
     private val stopCallbacks = mutableMapOf<String, Runnable>()
+    private val loudnessEnhancers = mutableMapOf<String, LoudnessEnhancer>()
 
     // Aktualisiert einmal pro Sekunde die Dauer-Benachrichtigung mit dem
     // Countdown bis zur nächsten fälligen Erinnerung.
@@ -60,16 +66,29 @@ class AlarmForegroundService : Service() {
         when (intent?.action) {
             "START_ALARM" -> startAlarm()
             "STOP_ALARM" -> stopAlarm()
+
+            // Eine einzelne Erinnerung live an-/ausschalten, während der
+            // Dienst bereits läuft (Schalter in der Liste).
+            "TOGGLE_REMINDER" -> {
+                val id = intent.getStringExtra("reminder_id")
+                val enabled = intent.getBooleanExtra("enabled", true)
+                if (id != null) toggleReminder(id, enabled)
+            }
+
+            // Kurzfristig alle laufenden Töne stumm schalten / wieder laut
+            // machen, über die Aktion in der Benachrichtigung.
+            "TOGGLE_MUTE" -> toggleMute()
+
             else -> {
-                // Der Service wurde vom System neu gestartet (z. B. weil der
-                // Prozess gekillt wurde), ohne dass wir explizit START_ALARM
-                // geschickt haben. Falls die Alarme vorher liefen, machen wir
-                // sofort weiter. Android verlangt außerdem, dass ein Service,
-                // der vorher im Vordergrund lief, nach einem Neustart erneut
-                // sehr schnell startForeground() aufruft – sonst kann es zum
-                // Absturz kommen.
+                // Der Service wurde vom System neu gestartet, ohne dass wir
+                // explizit START_ALARM geschickt haben. Falls die Alarme
+                // vorher liefen, machen wir sofort weiter. Android verlangt
+                // außerdem, dass ein Service, der vorher im Vordergrund
+                // lief, nach einem Neustart erneut sehr schnell
+                // startForeground() aufruft – sonst kann es zum Absturz
+                // kommen.
                 if (!isRunning) {
-                    if (prefs.getBoolean("alarm_was_running", false)) {
+                    if (prefs.getBoolean(KEY_WAS_RUNNING, false)) {
                         startAlarm()
                     } else {
                         startForeground(NOTIFICATION_ID, buildServiceNotification("Bereit"))
@@ -116,18 +135,14 @@ class AlarmForegroundService : Service() {
 
         if (activeReminders.isEmpty()) {
             Log.w(TAG, "Keine aktiven Erinnerungen mit Audiodatei gefunden")
-            // WICHTIG: erst kurz in den Vordergrund gehen, dann stoppen.
-            // Ein Service, der über startForegroundService() gestartet wurde,
-            // MUSS startForeground() aufrufen – sonst stürzt die App ab.
             startForeground(NOTIFICATION_ID, buildServiceNotification("Keine aktiven Erinnerungen"))
             stopSelf()
             return
         }
 
         isRunning = true
-        // Merken, dass die Alarme laufen -> der BootReceiver liest genau
-        // dieses Flag nach einem Geräte-Neustart aus.
-        prefs.edit().putBoolean("alarm_was_running", true).apply()
+        isMuted = false
+        prefs.edit().putBoolean(KEY_WAS_RUNNING, true).apply()
 
         val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
         wakeLock = pm.newWakeLock(
@@ -151,6 +166,53 @@ class AlarmForegroundService : Service() {
         Log.d(TAG, "Service gestartet mit ${activeReminders.size} Erinnerungen")
     }
 
+    /** Schaltet eine einzelne Erinnerung live an oder aus, während der
+     *  Dienst bereits läuft – ohne alle anderen zu beeinflussen. */
+    private fun toggleReminder(reminderId: String, enabled: Boolean) {
+        if (!isRunning) return
+
+        if (enabled) {
+            if (activeReminders.none { it.id == reminderId }) {
+                val reminder = repository.loadReminders().find { it.id == reminderId } ?: return
+                if (reminder.fileUri.isNullOrBlank()) return
+                activeReminders.add(reminder)
+                startTimerForReminder(reminder)
+            }
+        } else {
+            timers.remove(reminderId)?.cancel()
+            nextAlarmTimes.remove(reminderId)
+            prefs.edit().remove(nextAlarmKey(reminderId)).apply()
+            stopMediaPlayerFor(reminderId)
+            activeReminders.removeAll { it.id == reminderId }
+        }
+
+        if (activeReminders.isEmpty()) {
+            stopAlarm()
+        } else {
+            updateServiceNotification(buildCountdownText())
+        }
+    }
+
+    /** Schaltet ALLE gerade abgespielten/zukünftigen Töne kurzfristig stumm
+     *  bzw. wieder laut, ohne die Countdown-Timer anzuhalten. */
+    private fun toggleMute() {
+        if (!isRunning) return
+        isMuted = !isMuted
+
+        for ((id, player) in mediaPlayers) {
+            if (isMuted) {
+                player.setVolume(0f, 0f)
+            } else {
+                val reminder = activeReminders.find { it.id == id }
+                val volumePercent = reminder?.volume ?: 100
+                val nativeVolume = if (volumePercent <= 100) volumePercent / 100f else 1f
+                player.setVolume(nativeVolume, nativeVolume)
+            }
+        }
+
+        updateServiceNotification(buildCountdownText())
+    }
+
     private fun startTimerForReminder(reminder: Reminder) {
         timers[reminder.id]?.cancel()
 
@@ -159,21 +221,15 @@ class AlarmForegroundService : Service() {
 
         val nextTime = System.currentTimeMillis() + intervalMs
         nextAlarmTimes[reminder.id] = nextTime
-        // Für die App-eigene Countdown-Anzeige speichern (funktioniert auch
-        // ganz ohne Benachrichtigungsberechtigung).
         prefs.edit().putLong(nextAlarmKey(reminder.id), nextTime).apply()
 
         val timer = object : CountDownTimer(intervalMs, 1000) {
             override fun onTick(millisUntilFinished: Long) {
-                // Die Restzeit steht bereits in nextAlarmTimes[reminder.id]
-                // bzw. in den SharedPreferences; der zentrale Ticker
-                // (startTicker) und die MainActivity lesen sie von dort.
+                // Restzeit steht bereits in nextAlarmTimes/SharedPreferences.
             }
 
             override fun onFinish() {
                 if (reminder.useTimeWindow && !isWithinTimeWindow(reminder)) {
-                    // Außerhalb des Zeitfensters: einfach weiterzählen,
-                    // ohne den Ton abzuspielen.
                     startTimerForReminder(reminder)
                     return
                 }
@@ -192,8 +248,6 @@ class AlarmForegroundService : Service() {
         timer.start()
     }
 
-    /** Läuft jede Sekunde, solange der Service aktiv ist, und zeigt in der
-     *  Dauer-Benachrichtigung an, wann die nächste Erinnerung fällig ist. */
     private fun startTicker() {
         tickerRunnable?.let { handler?.removeCallbacks(it) }
         tickerRunnable = object : Runnable {
@@ -223,7 +277,7 @@ class AlarmForegroundService : Service() {
 
     private fun stopAlarm() {
         isRunning = false
-        prefs.edit().putBoolean("alarm_was_running", false).apply()
+        prefs.edit().putBoolean(KEY_WAS_RUNNING, false).apply()
 
         tickerRunnable?.let { handler?.removeCallbacks(it) }
         tickerRunnable = null
@@ -233,8 +287,6 @@ class AlarmForegroundService : Service() {
         }
         timers.clear()
 
-        // Countdown-Werte in den SharedPreferences aufräumen, damit die
-        // App-Liste danach "gestoppt" statt einer eingefrorenen Zahl zeigt.
         val editor = prefs.edit()
         for (reminder in activeReminders) {
             editor.remove(nextAlarmKey(reminder.id))
@@ -261,7 +313,6 @@ class AlarmForegroundService : Service() {
         stopMediaPlayerFor(reminder.id)
 
         val fileUri = reminder.fileUri ?: return
-        val volume = reminder.volume / 100f
 
         try {
             val player = MediaPlayer().apply {
@@ -272,10 +323,7 @@ class AlarmForegroundService : Service() {
                         .build()
                 )
                 setDataSource(this@AlarmForegroundService, Uri.parse(fileUri))
-                setVolume(volume, volume)
-                setOnCompletionListener {
-                    stopMediaPlayerFor(reminder.id)
-                }
+                setOnCompletionListener { stopMediaPlayerFor(reminder.id) }
                 setOnErrorListener { _, what, extra ->
                     Log.e(TAG, "MediaPlayer Fehler bei \"${reminder.name}\": what=$what extra=$extra")
                     showPlaybackErrorNotification(reminder)
@@ -283,9 +331,17 @@ class AlarmForegroundService : Service() {
                     true
                 }
                 prepare()
-                start()
             }
+
+            val enhancer = VolumeHelper.apply(player, reminder.volume)
+            enhancer?.let { loudnessEnhancers[reminder.id] = it }
+
+            if (isMuted) {
+                player.setVolume(0f, 0f)
+            }
+
             mediaPlayers[reminder.id] = player
+            player.start()
 
             if (reminder.limitDuration) {
                 val stopCallback = Runnable { stopMediaPlayerFor(reminder.id) }
@@ -295,9 +351,6 @@ class AlarmForegroundService : Service() {
 
             Log.d(TAG, "Alarm Sound für \"${reminder.name}\" wird abgespielt")
         } catch (e: Exception) {
-            // Wichtig: Fehler NICHT nur ins (für den Nutzer unsichtbare) Log
-            // schreiben, sondern auch als Benachrichtigung anzeigen –
-            // sonst merkt man als Nutzer nie, warum kein Ton kommt.
             Log.e(TAG, "Fehler beim Abspielen von ${reminder.name}: ${e.message}")
             showPlaybackErrorNotification(reminder)
         }
@@ -317,6 +370,9 @@ class AlarmForegroundService : Service() {
 
     private fun stopMediaPlayerFor(reminderId: String) {
         stopCallbacks.remove(reminderId)?.let { handler?.removeCallbacks(it) }
+        loudnessEnhancers.remove(reminderId)?.let {
+            try { it.release() } catch (_: Exception) {}
+        }
         mediaPlayers.remove(reminderId)?.let { player ->
             try {
                 if (player.isPlaying) player.stop()
@@ -387,15 +443,45 @@ class AlarmForegroundService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val muteIntent = Intent(this, AlarmForegroundService::class.java).apply {
+            action = "TOGGLE_MUTE"
+        }
+        val mutePendingIntent = PendingIntent.getService(
+            this, 2, muteIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        val muteLabel = if (isMuted) "🔊 Laut" else "🔇 Stumm"
+
+        // Roter Punkt = stumm geschaltet, grüner Punkt = aktiv & laut.
+        val dotColor = if (isMuted) Color.parseColor("#E53935") else Color.parseColor("#43A047")
+        val statusText = if (isMuted) "$text · Stumm" else text
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
+            .setLargeIcon(buildStatusDot(dotColor))
             .setContentTitle("⏰ Interval Alarm Multi")
-            .setContentText(text)
+            .setContentText(statusText)
             .setOngoing(true)
             .setSilent(true)
             .setContentIntent(pendingIntent)
+            .addAction(android.R.drawable.ic_lock_idle_alarm, muteLabel, mutePendingIntent)
             .addAction(android.R.drawable.ic_media_pause, "Stoppen", stopPendingIntent)
             .build()
+    }
+
+    /** Zeichnet einen einfachen farbigen Punkt als Bitmap – dient als
+     *  Status-Anzeige (rot = stumm, grün = aktiv) im großen Icon der
+     *  Benachrichtigung. */
+    private fun buildStatusDot(color: Int): Bitmap {
+        val size = 64
+        val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(bitmap)
+        val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            this.color = color
+            style = Paint.Style.FILL
+        }
+        canvas.drawCircle(size / 2f, size / 2f, size / 2f - 4f, paint)
+        return bitmap
     }
 
     private fun updateServiceNotification(text: String) {
